@@ -4,14 +4,166 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: sans-serif; padding: 10px; width: 200px; text-align: center; }
-    button { width: 100%; padding: 12px; font-size: 14px; cursor: pointer; }
-    #status { margin-top: 10px; font-size: 12px; min-height: 15px; }
+    body { 
+      font-family: 'Segoe UI', Arial, sans-serif; 
+      padding: 15px; 
+      width: 350px; 
+      max-height: 600px;
+      overflow-y: auto;
+      margin: 0;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #0066cc;
+    }
+    
+    .header h2 {
+      margin: 0;
+      color: #000091;
+      font-size: 16px;
+    }
+    
+    button { 
+      width: 100%; 
+      padding: 12px; 
+      font-size: 13px; 
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    #startAnnotation {
+      background: linear-gradient(135deg, #000091, #0066cc);
+      color: white;
+    }
+    
+    #analyzeButton {
+      background: linear-gradient(135deg, #28a745, #20c997);
+      color: white;
+    }
+    
+    .clear-button {
+      background: linear-gradient(135deg, #dc3545, #c82333) !important;
+      color: white !important;
+      font-size: 12px !important;
+      padding: 8px 12px !important;
+      width: auto !important;
+      margin-right: 8px;
+    }
+    
+    .export-button {
+      background: linear-gradient(135deg, #6f42c1, #5a379c) !important;
+      color: white !important;
+      font-size: 12px !important;
+      padding: 8px 12px !important;
+      width: auto !important;
+    }
+    
+    #status { 
+      margin: 15px 0;
+      font-size: 12px; 
+      min-height: 20px;
+      padding: 8px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      text-align: center;
+    }
+    
+    .stats-container {
+      margin-top: 15px;
+      font-size: 11px;
+      text-align: left;
+    }
+    
+    .stats-container h3 {
+      color: #000091;
+      font-size: 14px;
+      margin: 0 0 10px 0;
+      text-align: center;
+    }
+    
+    .stats-container h4 {
+      color: #0066cc;
+      font-size: 12px;
+      margin: 10px 0 5px 0;
+      padding: 4px 0;
+      border-bottom: 1px solid #e9ecef;
+    }
+    
+    .stat-section {
+      margin-bottom: 12px;
+      padding: 8px;
+      background: #f8f9fa;
+      border-radius: 4px;
+    }
+    
+    .establishment-item {
+      background: white;
+      padding: 6px;
+      margin: 4px 0;
+      border-radius: 3px;
+      border-left: 3px solid #0066cc;
+    }
+    
+    .zone-item, .division-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 6px;
+      margin: 2px 0;
+      background: white;
+      border-radius: 3px;
+    }
+    
+    .badge {
+      background: #0066cc;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      margin-right: 4px;
+    }
+    
+    .count {
+      font-weight: bold;
+      color: #0066cc;
+    }
+    
+    .buttons-container {
+      display: flex;
+      justify-content: center;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #e9ecef;
+    }
   </style>
 </head>
 <body>
-  <button id="startAnnotation">Annoter 'lu' sur tout</button>
+  <div class="header">
+    <h2>🤖 SANTORIN Auto-Annotateur</h2>
+  </div>
+  
+  <button id="startAnnotation">📝 Annoter 'lu' sur tout</button>
+  <button id="analyzeButton">📊 Analyser les établissements</button>
+  
   <div id="status"></div>
+  <div id="stats"></div>
+  
   <script src="popup.js"></script>
 </body>
 </html>

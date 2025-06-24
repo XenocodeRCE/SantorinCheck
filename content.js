@@ -55,7 +55,6 @@
     
     return santorinElements.some(selector => document.querySelector(selector));
   }
-
   function initializeExtension() {
     if (checkSantorinPage()) {
       addExtensionIndicator();
@@ -72,6 +71,13 @@
       meta.name = 'santorin-extension-active';
       meta.content = 'true';
       document.head.appendChild(meta);
+      
+      // Collecter automatiquement les métadonnées si on est sur une page de copie
+      if (window.location.pathname.includes('/lots/') && window.location.pathname.split('/').length >= 5) {
+        setTimeout(() => {
+          collectCopyMetadata();
+        }, 2000); // Attendre que la page soit complètement chargée
+      }
       
       console.log('SANTORIN Auto-Annotateur: Extension initialisée pour Edge');
     }
@@ -91,7 +97,6 @@
   }
 
   tryInitialize();
-
   // Observer pour les changements de page SPA
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
@@ -102,6 +107,13 @@
         
         if (hasCanvas && !document.getElementById('santorin-extension-indicator')) {
           setTimeout(addExtensionIndicator, 500);
+          
+          // Collecter les métadonnées si on détecte une nouvelle page de copie
+          if (window.location.pathname.includes('/lots/') && window.location.pathname.split('/').length >= 5) {
+            setTimeout(() => {
+              collectCopyMetadata();
+            }, 1500);
+          }
         }
       }
     });
@@ -113,6 +125,27 @@
       subtree: true
     });
   }
+
+  // Observer les changements d'URL pour les SPA
+  let currentUrl = window.location.href;
+  const urlObserver = new MutationObserver(() => {
+    if (window.location.href !== currentUrl) {
+      currentUrl = window.location.href;
+      console.log('[SantorinCheck] Changement d\'URL détecté:', currentUrl);
+      
+      // Si on arrive sur une nouvelle page de copie, collecter les métadonnées
+      if (window.location.pathname.includes('/lots/') && window.location.pathname.split('/').length >= 5) {
+        setTimeout(() => {
+          collectCopyMetadata();
+        }, 2000);
+      }
+    }
+  });
+
+  urlObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
 
   async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -223,4 +256,108 @@ function annotatePage(config) {
     }, '*');
     // ...existing code...
 }
+
+async function collectCopyMetadata() {
+    try {
+      console.log('[SantorinCheck] Collecte automatique des métadonnées...');
+      
+      // Récupérer l'ID de la copie depuis l'URL
+      const copyId = window.location.pathname.split('/').pop();
+      
+      if (!copyId) {
+        console.log('[SantorinCheck] ID de copie non trouvé dans l\'URL');
+        return;
+      }
+
+      // Faire l'appel API pour récupérer les métadonnées
+      const response = await fetch(window.location.origin + '/th/epreuveCandidat/' + copyId + '/epcCorrection', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        console.log('[SantorinCheck] Erreur lors de l\'appel API:', response.status);
+        return;
+      }
+
+      const data = await response.json();
+      
+      const copyMetadata = {
+        id: data.id,
+        codeZG: data.codeZG,
+        codeDivisionClasse: data.codeDivisionClasse,
+        nomSalle: data.nomSalle,
+        numeroJury: data.numeroJury,
+        libelleAnonymat: data.libelleAnonymat,
+        etablissementCode: data.etablissementInscription?.code || 'Inconnu',
+        etablissementLibelle: data.etablissementInscription?.libelle || 'Inconnu',
+        centreEpreuve: data.centreEpreuve?.libelle || 'Inconnu',
+        qualificationPresentee: data.qualificationPresentee?.libelle || 'Inconnu',
+        dateEpreuve: data.dateEpreuveFormatted,
+        nombrePages: data.metaData?.nombreDePage || 0,
+        note: data.notation?.note || 'Non notée',
+        dateCollecte: new Date().toISOString()
+      };
+
+      console.log('[SantorinCheck] Métadonnées collectées:', copyMetadata);
+
+      // Envoyer les métadonnées au background script pour sauvegarde
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        chrome.runtime.sendMessage({
+          action: 'saveCopyMetadata',
+          metadata: copyMetadata
+        });
+      }
+
+      // Afficher une notification discrète
+      showMetadataNotification(copyMetadata);
+
+    } catch (error) {
+      console.error('[SantorinCheck] Erreur lors de la collecte des métadonnées:', error);
+    }
+  }
+
+  function showMetadataNotification(metadata) {
+    // Créer une notification discrète
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 60px;
+      right: 10px;
+      background: linear-gradient(135deg, #28a745, #20c997);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 15px;
+      font-size: 11px;
+      z-index: 999999998;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+      max-width: 250px;
+      word-wrap: break-word;
+      opacity: 0;
+      transform: translateX(100%);
+      transition: all 0.3s ease;
+    `;
+    
+    notification.innerHTML = `
+      📊 Métadonnées collectées<br>
+      <small>Zone: ${metadata.codeZG} | ${metadata.libelleAnonymat}</small>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Animation d'entrée
+    setTimeout(() => {
+      notification.style.opacity = '1';
+      notification.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Masquer après quelques secondes
+    setTimeout(() => {
+      notification.style.opacity = '0';
+      notification.style.transform = 'translateX(100%)';
+      setTimeout(() => notification.remove(), 300);
+    }, 4000);
+  }
 })();

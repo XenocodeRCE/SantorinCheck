@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "SANTORIN Auto-Annotateur",
+  "name": "SANTORIN Auto-Annotateur v2",
   "version": "1.0.0",
   "description": "Automatise l'annotation des copies SANTORIN",
   "permissions": [
