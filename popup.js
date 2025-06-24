@@ -122,7 +122,6 @@ class SantorinAnnotator {
       this.analyzeButton.disabled = false;
     }
   }
-
   calculateEstablishmentStats(copiesData) {
     const establishments = new Map();
     const zones = new Map();
@@ -150,7 +149,7 @@ class SantorinAnnotator {
       const establishment = establishments.get(establishmentKey);
       establishment.copies.push(copy);
       establishment.divisions.add(copy.codeDivisionClasse);
-      establishment.salles.add(copy.nomSalle);
+      establishment.salles.add(copy.nomSalle || 'Non définie');
       establishment.juries.add(copy.numeroJury);
 
       // Compter par zone géographique
@@ -159,34 +158,36 @@ class SantorinAnnotator {
       // Compter par division
       divisions.set(copy.codeDivisionClasse, (divisions.get(copy.codeDivisionClasse) || 0) + 1);
       
-      // Compter par salle
-      salles.set(copy.nomSalle, (salles.get(copy.nomSalle) || 0) + 1);
+      // Compter par salle (gérer les salles vides/undefined)
+      const salleName = copy.nomSalle || 'Non définie';
+      salles.set(salleName, (salles.get(salleName) || 0) + 1);
       
       // Compter par jury
       juries.set(copy.numeroJury, (juries.get(copy.numeroJury) || 0) + 1);
-    });
-
-    return {
+    });    return {
       totalCopies: copiesData.length,
       establishments: Array.from(establishments.values()),
       zones: Array.from(zones.entries()).sort((a, b) => b[1] - a[1]),
       divisions: Array.from(divisions.entries()).sort((a, b) => b[1] - a[1]),
       salles: Array.from(salles.entries()).sort((a, b) => b[1] - a[1]),
-      juries: Array.from(juries.entries()).sort((a, b) => b[1] - a[1])
+      juries: Array.from(juries.entries()).sort((a, b) => b[1] - a[1]),
+      copiesData: copiesData // Ajouter les données des copies pour les détails
     };
   }
 
   displayStats(stats) {
     const html = `
       <div class="stats-container">
-        <h3>📊 Analyse du lot de correction</h3>
-        
-        <div class="stat-section">
+        <h3>📊 Analyse du lot de correction</h3>        <div class="stat-section">
           <h4>📋 Résumé général</h4>
           <p><strong>Total des copies analysées :</strong> ${stats.totalCopies}</p>
           <p><strong>Nombre d'établissements différents :</strong> ${stats.establishments.length}</p>
           <p><strong>Zones géographiques :</strong> ${stats.zones.length}</p>
           <p><strong>Divisions/classes :</strong> ${stats.divisions.length}</p>
+          <p><strong>Salles d'examen :</strong> ${stats.salles.length}</p>
+          ${stats.salles.some(([salle]) => salle === 'Non définie') ? 
+            `<p><small style="color: #dc3545;">⚠️ ${stats.salles.find(([salle]) => salle === 'Non définie')?.[1] || 0} copies sans salle définie</small></p>` : 
+            ''}
         </div>
 
         <div class="stat-section">
@@ -212,9 +213,7 @@ class SantorinAnnotator {
               <span class="count">${count} copies</span>
             </div>
           `).join('')}
-        </div>
-
-        <div class="stat-section">
+        </div>        <div class="stat-section">
           <h4>🎓 Répartition par division/classe</h4>
           ${stats.divisions.map(([division, count]) => `
             <div class="division-item">
@@ -222,6 +221,29 @@ class SantorinAnnotator {
               <span class="count">${count} copies</span>
             </div>
           `).join('')}
+        </div>        <div class="stat-section">
+          <h4>🏫 Répartition par salle d'examen</h4>
+          ${stats.salles.map(([salle, count]) => {
+            // Trouver la zone géographique de cette salle
+            const salleInfo = this.getSalleZoneInfo(salle, stats.copiesData);
+            const salleLabel = salle === 'Non définie' ? '⚠️ Salle non définie' : `Salle ${salle}`;
+            const zoneLabel = salleInfo.zones.length > 0 ? ` (${salleInfo.zones.join(', ')})` : '';
+            
+            return `
+              <div class="salle-item">
+                <div class="salle-header" data-salle="${salle}">
+                  <span>${salleLabel}${zoneLabel}</span>
+                  <div class="salle-controls">
+                    <span class="count">${count} copies</span>
+                    <span class="toggle-icon" id="icon-${salle.replace(/[^a-zA-Z0-9]/g, '_')}">▼</span>
+                  </div>
+                </div>
+                <div class="salle-details" id="details-${salle.replace(/[^a-zA-Z0-9]/g, '_')}" style="display: none;">
+                  ${this.getSalleDetails(salle, stats.copiesData)}
+                </div>
+              </div>
+            `;
+          }).join('')}
         </div>
 
         <div class="buttons-container">
@@ -231,11 +253,43 @@ class SantorinAnnotator {
       </div>
     `;
 
-    this.statsDiv.innerHTML = html;
-
-    // Ajouter les gestionnaires d'événements
+    this.statsDiv.innerHTML = html;    // Ajouter les gestionnaires d'événements
     document.getElementById('clearData')?.addEventListener('click', () => this.clearData());
     document.getElementById('exportData')?.addEventListener('click', () => this.exportData(stats));
+      // Ajouter les event listeners pour les menus déroulants des salles
+    document.querySelectorAll('.salle-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const salle = header.getAttribute('data-salle');
+        this.toggleSalleDetails(salle);
+      });
+    });
+      // Ajouter les event listeners pour les liens de copies sans URL
+    document.querySelectorAll('.copy-link[data-copy-id]').forEach(link => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const copyId = link.getAttribute('data-copy-id');
+        
+        // Récupérer l'URL actuelle pour construire l'URL de la copie
+        try {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tab?.url) {
+            const currentUrl = tab.url;
+            const urlParts = currentUrl.split('/');
+            if (urlParts.length >= 2) {
+              // Prendre tout sauf le dernier élément et ajouter l'ID de la copie
+              const baseUrl = urlParts.slice(0, -1).join('/');
+              const copyUrl = `${baseUrl}/${copyId}`;
+              window.open(copyUrl, '_blank');
+            } else {
+              alert('Impossible de construire l\'URL de la copie');
+            }
+          }
+        } catch (error) {
+          console.error('Erreur lors de la construction de l\'URL:', error);
+          alert('Erreur lors de l\'ouverture de la copie');
+        }
+      });
+    });
   }
 
   async clearData() {
@@ -263,6 +317,48 @@ class SantorinAnnotator {
     URL.revokeObjectURL(url);
     
     this.setStatus('Données exportées.');
+  }  getSalleDetails(salle, copiesData) {
+    const copiesInSalle = copiesData.filter(copy => (copy.nomSalle || 'Non définie') === salle);
+    
+    return copiesInSalle.map(copy => {
+      return `
+        <div class="copy-item">
+          <a href="#" 
+             class="copy-link"
+             title="Ouvrir la copie ${copy.libelleAnonymat}"
+             data-copy-id="${copy.id}">
+            📄 ${copy.libelleAnonymat || copy.id}
+          </a>
+          <div class="copy-info">
+            <small>
+              ${copy.codeDivisionClasse} | 
+              Note: ${copy.note} | 
+              ${copy.nombrePages} pages
+            </small>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  toggleSalleDetails(salle) {
+    const detailsId = 'details-' + salle.replace(/[^a-zA-Z0-9]/g, '_');
+    const iconId = 'icon-' + salle.replace(/[^a-zA-Z0-9]/g, '_');
+    
+    const details = document.getElementById(detailsId);
+    const icon = document.getElementById(iconId);
+    
+    if (details && icon) {
+      const isVisible = details.style.display !== 'none';
+      details.style.display = isVisible ? 'none' : 'block';
+      icon.textContent = isVisible ? '▼' : '▲';
+    }
+  }
+
+  getSalleZoneInfo(salle, copiesData) {
+    const copiesInSalle = copiesData.filter(copy => (copy.nomSalle || 'Non définie') === salle);
+    const zones = [...new Set(copiesInSalle.map(copy => copy.codeZG))];
+    return { zones };
   }
 }
 

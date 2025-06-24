@@ -260,9 +260,12 @@ function annotatePage(config) {
 async function collectCopyMetadata() {
     try {
       console.log('[SantorinCheck] Collecte automatique des métadonnées...');
-      
-      // Récupérer l'ID de la copie depuis l'URL
+        // Récupérer l'ID de la copie depuis l'URL
       const copyId = window.location.pathname.split('/').pop();
+      
+      // Récupérer l'ID du lot depuis l'URL
+      const lotIdMatch = window.location.pathname.match(/\/lots\/([^\/]+)/);
+      const lotId = lotIdMatch ? lotIdMatch[1] : null;
       
       if (!copyId) {
         console.log('[SantorinCheck] ID de copie non trouvé dans l\'URL');
@@ -282,9 +285,9 @@ async function collectCopyMetadata() {
       }
 
       const data = await response.json();
-      
-      const copyMetadata = {
+        const copyMetadata = {
         id: data.id,
+        lotId: lotId,
         codeZG: data.codeZG,
         codeDivisionClasse: data.codeDivisionClasse,
         nomSalle: data.nomSalle,

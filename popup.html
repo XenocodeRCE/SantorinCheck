@@ -119,15 +119,77 @@
       margin: 4px 0;
       border-radius: 3px;
       border-left: 3px solid #0066cc;
-    }
-    
-    .zone-item, .division-item {
+    }    .zone-item, .division-item {
       display: flex;
       justify-content: space-between;
       padding: 3px 6px;
       margin: 2px 0;
       background: white;
       border-radius: 3px;
+    }
+    
+    .salle-item {
+      margin: 2px 0;
+      background: white;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    
+    .salle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 6px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    
+    .salle-header:hover {
+      background-color: #f0f0f0;
+    }
+    
+    .salle-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .toggle-icon {
+      font-size: 10px;
+      color: #666;
+      transition: transform 0.2s ease;
+    }
+    
+    .salle-details {
+      padding: 6px 12px 6px 20px;
+      background-color: #f8f9fa;
+      border-top: 1px solid #e9ecef;
+    }
+    
+    .copy-item {
+      margin: 4px 0;
+      padding: 4px;
+      background: white;
+      border-radius: 3px;
+      border-left: 2px solid #28a745;
+    }
+    
+    .copy-link {
+      color: #0066cc;
+      text-decoration: none;
+      font-weight: 500;
+      display: block;
+      margin-bottom: 2px;
+    }
+    
+    .copy-link:hover {
+      color: #004499;
+      text-decoration: underline;
+    }
+    
+    .copy-info {
+      color: #666;
+      font-size: 9px;
     }
     
     .badge {
