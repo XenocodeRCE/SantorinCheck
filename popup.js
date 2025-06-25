@@ -157,10 +157,10 @@ class SantorinAnnotator {
       
       // Compter par division
       divisions.set(copy.codeDivisionClasse, (divisions.get(copy.codeDivisionClasse) || 0) + 1);
-      
-      // Compter par salle (gérer les salles vides/undefined)
+        // Compter par salle (gérer les salles vides/undefined et distinguer par zone)
       const salleName = copy.nomSalle || 'Non définie';
-      salles.set(salleName, (salles.get(salleName) || 0) + 1);
+      const salleZoneKey = `${salleName}_${copy.codeZG}`; // Clé unique : salle + zone
+      salles.set(salleZoneKey, (salles.get(salleZoneKey) || 0) + 1);
       
       // Compter par jury
       juries.set(copy.numeroJury, (juries.get(copy.numeroJury) || 0) + 1);
@@ -188,9 +188,7 @@ class SantorinAnnotator {
           ${stats.salles.some(([salle]) => salle === 'Non définie') ? 
             `<p><small style="color: #dc3545;">⚠️ ${stats.salles.find(([salle]) => salle === 'Non définie')?.[1] || 0} copies sans salle définie</small></p>` : 
             ''}
-        </div>
-
-        <div class="stat-section">
+        </div>        <div class="stat-section">
           <h4>🏫 Établissements représentés</h4>
           ${stats.establishments.map(etab => `
             <div class="establishment-item">
@@ -201,6 +199,10 @@ class SantorinAnnotator {
               <span class="badge">${etab.copies.length} copies</span>
               <span class="badge">${etab.divisions.size} divisions</span>
               <span class="badge">${etab.salles.size} salles</span>
+              <br>
+              <div class="establishment-salles">
+                <small><strong>Salles:</strong> ${Array.from(etab.salles).filter(s => s !== 'Non définie').sort().join(', ')}${Array.from(etab.salles).includes('Non définie') ? ' + salles non définies' : ''}</small>
+              </div>
             </div>
           `).join('')}
         </div>
@@ -223,23 +225,26 @@ class SantorinAnnotator {
           `).join('')}
         </div>        <div class="stat-section">
           <h4>🏫 Répartition par salle d'examen</h4>
-          ${stats.salles.map(([salle, count]) => {
-            // Trouver la zone géographique de cette salle
-            const salleInfo = this.getSalleZoneInfo(salle, stats.copiesData);
-            const salleLabel = salle === 'Non définie' ? '⚠️ Salle non définie' : `Salle ${salle}`;
-            const zoneLabel = salleInfo.zones.length > 0 ? ` (${salleInfo.zones.join(', ')})` : '';
+          ${stats.salles.map(([salleZoneKey, count]) => {
+            // Extraire le nom de la salle et la zone de la clé
+            const lastUnderscoreIndex = salleZoneKey.lastIndexOf('_');
+            const salleName = salleZoneKey.substring(0, lastUnderscoreIndex);
+            const zone = salleZoneKey.substring(lastUnderscoreIndex + 1);
+            
+            const salleLabel = salleName === 'Non définie' ? '⚠️ Salle non définie' : `Salle ${salleName}`;
+            const zoneLabel = ` (${zone})`;
             
             return `
               <div class="salle-item">
-                <div class="salle-header" data-salle="${salle}">
+                <div class="salle-header" data-salle="${salleZoneKey}">
                   <span>${salleLabel}${zoneLabel}</span>
                   <div class="salle-controls">
                     <span class="count">${count} copies</span>
-                    <span class="toggle-icon" id="icon-${salle.replace(/[^a-zA-Z0-9]/g, '_')}">▼</span>
+                    <span class="toggle-icon" id="icon-${salleZoneKey.replace(/[^a-zA-Z0-9]/g, '_')}">▼</span>
                   </div>
                 </div>
-                <div class="salle-details" id="details-${salle.replace(/[^a-zA-Z0-9]/g, '_')}" style="display: none;">
-                  ${this.getSalleDetails(salle, stats.copiesData)}
+                <div class="salle-details" id="details-${salleZoneKey.replace(/[^a-zA-Z0-9]/g, '_')}" style="display: none;">
+                  ${this.getSalleDetailsUnique(salleName, zone, stats.copiesData)}
                 </div>
               </div>
             `;
@@ -255,12 +260,11 @@ class SantorinAnnotator {
 
     this.statsDiv.innerHTML = html;    // Ajouter les gestionnaires d'événements
     document.getElementById('clearData')?.addEventListener('click', () => this.clearData());
-    document.getElementById('exportData')?.addEventListener('click', () => this.exportData(stats));
-      // Ajouter les event listeners pour les menus déroulants des salles
+    document.getElementById('exportData')?.addEventListener('click', () => this.exportData(stats));    // Ajouter les event listeners pour les menus déroulants des salles
     document.querySelectorAll('.salle-header').forEach(header => {
       header.addEventListener('click', () => {
-        const salle = header.getAttribute('data-salle');
-        this.toggleSalleDetails(salle);
+        const salleKey = header.getAttribute('data-salle');
+        this.toggleSalleDetails(salleKey);
       });
     });
       // Ajouter les event listeners pour les liens de copies sans URL
@@ -341,9 +345,34 @@ class SantorinAnnotator {
     }).join('');
   }
 
-  toggleSalleDetails(salle) {
-    const detailsId = 'details-' + salle.replace(/[^a-zA-Z0-9]/g, '_');
-    const iconId = 'icon-' + salle.replace(/[^a-zA-Z0-9]/g, '_');
+  getSalleDetailsUnique(salleName, zone, copiesData) {
+    const copiesInSalle = copiesData.filter(copy => 
+      (copy.nomSalle || 'Non définie') === salleName && copy.codeZG === zone
+    );
+    
+    return copiesInSalle.map(copy => {
+      return `
+        <div class="copy-item">
+          <a href="#" 
+             class="copy-link"
+             title="Ouvrir la copie ${copy.libelleAnonymat}"
+             data-copy-id="${copy.id}">
+            📄 ${copy.libelleAnonymat || copy.id}
+          </a>
+          <div class="copy-info">
+            <small>
+              ${copy.codeDivisionClasse} | 
+              Note: ${copy.note} | 
+              ${copy.nombrePages} pages
+            </small>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  toggleSalleDetails(salleKey) {
+    const detailsId = 'details-' + salleKey.replace(/[^a-zA-Z0-9]/g, '_');
+    const iconId = 'icon-' + salleKey.replace(/[^a-zA-Z0-9]/g, '_');
     
     const details = document.getElementById(detailsId);
     const icon = document.getElementById(iconId);
