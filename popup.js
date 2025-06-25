@@ -223,7 +223,12 @@ class SantorinAnnotator {
               <span class="count">${count} copies</span>
             </div>
           `).join('')}
-        </div>        <div class="stat-section">
+        </div>
+
+        <div class="stat-section">
+          <h4>📈 Analyse avancée par division</h4>
+          ${this.generateDivisionAnalysis(stats)}
+        </div><div class="stat-section">
           <h4>🏫 Répartition par salle d'examen</h4>
           ${stats.salles.map(([salleZoneKey, count]) => {
             // Extraire le nom de la salle et la zone de la clé
@@ -388,6 +393,115 @@ class SantorinAnnotator {
     const copiesInSalle = copiesData.filter(copy => (copy.nomSalle || 'Non définie') === salle);
     const zones = [...new Set(copiesInSalle.map(copy => copy.codeZG))];
     return { zones };
+  }
+
+  generateDivisionAnalysis(stats) {
+    const divisionDetails = new Map();
+    
+    // Analyser chaque copie pour collecter les détails par division
+    stats.copiesData.forEach(copy => {
+      const division = copy.codeDivisionClasse;
+      
+      if (!divisionDetails.has(division)) {
+        divisionDetails.set(division, {
+          copies: [],
+          zones: new Set(),
+          salles: new Set(),
+          etablissements: new Set(),
+          juries: new Set(),
+          notes: [],
+          totalPages: 0
+        });
+      }
+      
+      const detail = divisionDetails.get(division);
+      detail.copies.push(copy);
+      detail.zones.add(copy.codeZG);
+      detail.salles.add(copy.nomSalle || 'Non définie');
+      detail.etablissements.add(copy.etablissementLibelle || 'Inconnu');
+      detail.juries.add(copy.numeroJury);
+      
+      // Analyser les notes (si elles existent et sont numériques)
+      if (copy.note && !isNaN(parseFloat(copy.note))) {
+        detail.notes.push(parseFloat(copy.note));
+      }
+      
+      // Compter les pages
+      if (copy.nombrePages && !isNaN(parseInt(copy.nombrePages))) {
+        detail.totalPages += parseInt(copy.nombrePages);
+      }
+    });
+    
+    // Créer le HTML pour l'analyse
+    const sortedDivisions = Array.from(divisionDetails.entries())
+      .sort((a, b) => b[1].copies.length - a[1].copies.length);
+    
+    return sortedDivisions.map(([division, detail]) => {
+      // Calculer les statistiques des notes
+      let noteStats = '';
+      if (detail.notes.length > 0) {
+        const moyenne = (detail.notes.reduce((sum, note) => sum + note, 0) / detail.notes.length).toFixed(2);
+        const min = Math.min(...detail.notes);
+        const max = Math.max(...detail.notes);
+        noteStats = `
+          <div class="note-stats">
+            <small><strong>Notes:</strong> Moyenne: ${moyenne} | Min: ${min} | Max: ${max} (${detail.notes.length} notées)</small>
+          </div>
+        `;
+      }
+      
+      // Calculer la moyenne de pages par copie
+      const avgPages = detail.totalPages > 0 ? (detail.totalPages / detail.copies.length).toFixed(1) : 'N/A';
+      
+      return `
+        <div class="division-analysis-item">
+          <div class="division-header">
+            <h5>📚 ${division}</h5>
+            <span class="division-count">${detail.copies.length} copies</span>
+          </div>
+          <div class="division-details">
+            <div class="division-stats-grid">
+              <div class="stat-item">
+                <span class="stat-label">🗺️ Zones:</span>
+                <span class="stat-value">${detail.zones.size}</span>
+                <small>(${Array.from(detail.zones).sort().join(', ')})</small>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">🏫 Établissements:</span>
+                <span class="stat-value">${detail.etablissements.size}</span>
+                <small>(${Array.from(detail.etablissements).filter(e => e !== 'Inconnu').join(', ')})</small>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">🚪 Salles:</span>
+                <span class="stat-value">${detail.salles.size}</span>
+                <small>(${Array.from(detail.salles).filter(s => s !== 'Non définie').sort().join(', ')})</small>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">👥 Jurys:</span>
+                <span class="stat-value">${detail.juries.size}</span>
+                <small>(${Array.from(detail.juries).sort().join(', ')})</small>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">📄 Pages moy.:</span>
+                <span class="stat-value">${avgPages}</span>
+                <small>(${detail.totalPages} total)</small>
+              </div>
+            </div>
+            ${noteStats}
+            <div class="division-distribution">
+              <small><strong>Répartition géographique:</strong></small>
+              <div class="zone-distribution">
+                ${Array.from(detail.zones).map(zone => {
+                  const copiesInZone = detail.copies.filter(c => c.codeZG === zone).length;
+                  const percentage = ((copiesInZone / detail.copies.length) * 100).toFixed(1);
+                  return `<span class="zone-badge">Zone ${zone}: ${copiesInZone} (${percentage}%)</span>`;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 }
 
