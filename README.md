@@ -22,7 +22,7 @@ Cette extension est conçue pour les correcteurs utilisant la plateforme Santori
 ### Collecte automatique des données
 Dès que vous visitez une page de copie, l'extension collecte automatiquement :
 - Zone géographique (code département)
-- Établissement d'origine
+- Établissement d'origine (Supprimé côté serveur la plupart du temps)
 - Division/classe (ex: TLE-09)
 - Salle d'examen
 - Numéro de jury
