@@ -285,12 +285,38 @@ async function collectCopyMetadata() {
       }
 
       const data = await response.json();
-        const copyMetadata = {
+      
+      // Extraire les informations du directory si disponible
+      let pileInfo = 'Non définie';
+      let timestampNumerisation = 'Inconnu';
+      let numeroPile = 'Inconnu';
+      
+      console.log('[SantorinCheck] Structure metaData:', data.metaData);
+      
+      if (data.metaData?.pages?.[0]?.directory) {
+        const directory = data.metaData.pages[0].directory;
+        console.log('[SantorinCheck] Directory trouvé:', directory);
+        // Extraire: BGT/2025/A08/1042-/PILES/1750075575416_20935/00005
+        const match = directory.match(/PILES\/(\d+)_(\d+)\//);
+        console.log('[SantorinCheck] Résultat match:', match);
+        if (match) {
+          timestampNumerisation = match[1];
+          numeroPile = match[2];
+          pileInfo = `Pile ${numeroPile}`;
+          console.log('[SantorinCheck] Données pile extraites:', { pileInfo, numeroPile, timestampNumerisation });
+        }
+      } else {
+        console.log('[SantorinCheck] Aucun directory trouvé dans metaData');
+      }
+
+      const copyMetadata = {
         id: data.id,
         lotId: lotId,
         codeZG: data.codeZG,
         codeDivisionClasse: data.codeDivisionClasse,
-        nomSalle: data.nomSalle,
+        pileNumerisation: pileInfo, // Remplace nomSalle
+        numeroPile: numeroPile,
+        timestampNumerisation: timestampNumerisation,
         numeroJury: data.numeroJury,
         libelleAnonymat: data.libelleAnonymat,
         etablissementCode: data.etablissementInscription?.code || 'Inconnu',
@@ -306,11 +332,36 @@ async function collectCopyMetadata() {
       console.log('[SantorinCheck] Métadonnées collectées:', copyMetadata);
 
       // Envoyer les métadonnées au background script pour sauvegarde
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage({
-          action: 'saveCopyMetadata',
-          metadata: copyMetadata
-        });
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({
+            action: 'saveCopyMetadata',
+            metadata: copyMetadata
+          });
+          console.log('[SantorinCheck] Métadonnées envoyées au background script');
+        } else {
+          console.log('[SantorinCheck] Chrome runtime non disponible, sauvegarde locale...');
+          // Fallback : sauvegarder directement dans le storage local
+          chrome.storage.local.get('copiesData', (result) => {
+            const existingData = result.copiesData || [];
+            const updatedData = existingData.filter(copy => copy.id !== copyMetadata.id);
+            updatedData.push(copyMetadata);
+            chrome.storage.local.set({ copiesData: updatedData });
+          });
+        }
+      } catch (runtimeError) {
+        console.log('[SantorinCheck] Erreur runtime, tentative de sauvegarde locale...', runtimeError);
+        try {
+          chrome.storage.local.get('copiesData', (result) => {
+            const existingData = result.copiesData || [];
+            const updatedData = existingData.filter(copy => copy.id !== copyMetadata.id);
+            updatedData.push(copyMetadata);
+            chrome.storage.local.set({ copiesData: updatedData });
+            console.log('[SantorinCheck] Sauvegarde locale réussie');
+          });
+        } catch (storageError) {
+          console.error('[SantorinCheck] Erreur de sauvegarde:', storageError);
+        }
       }
 
       // Afficher une notification discrète
